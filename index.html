@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>TextLens 2.0</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://plausible.io/js/script.js"></script>
+    <script type="module">
+      import pdfjsDist from "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.2.67/+esm";
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.2.67/build/pdf.worker.min.mjs";
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/showdown@1.9.1/dist/showdown.min.js"></script>
+    <style>
+      body {
+        padding: 1em;
+        font-family: "Roboto", sans-serif;
+        line-height: 1.3;
+        color: #333;
+        background-color: #f5f5f5;
+        background-size: cover;
+        background-position: center;
+        opacity: 2;
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .header {
+        text-align: center; /* center the header content */
+        margin-bottom: 1px; /* add some space between header and summary */
+      }
+
+      .header h1 {
+        font-size: 36px; /* increase font size for better visibility */
+        font-weight: bold; /* make the text bold */
+        color: #333; /* dark gray text color */
+      }
+
+      .header p {
+        font-size: 20px; /* increase font size for better visibility */
+        font-weight: bold; /* make the text bold */
+        color: #666; /* medium gray text color */
+      }
+      .dropzone {
+        box-sizing: border-box;
+        width: 100%;
+        height: 5em;
+        border: 2px dashed #ccc;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 24px;
+        cursor: pointer;
+        padding: 1em;
+        margin-bottom: 10px;
+        background-color: #fff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .dropzone.disabled {
+        cursor: not-allowed;
+      }
+
+      .dropzone.drag-over {
+        background-color: #f0f0f0;
+      }
+
+      .image-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      .image-container img {
+        width: 45%;
+        margin: 10px;
+      }
+
+      .image-container textarea {
+        width: 45%;
+        margin: 10px;
+      }
+
+      textarea {
+        width: 100%;
+        height: 10em;
+        margin-bottom: 20px;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        padding: 10px;
+        font-size: 16px;
+        line-height: 1.5;
+      }
+
+      .full-document-section {
+        display: none;
+        margin-bottom: 20px;
+      }
+
+      button {
+        background-color: #4caf50;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+        width: 100%;
+      }
+
+      button:hover {
+        background-color: #45a049;
+      }
+
+      #summary {
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        padding: 10px;
+        font-size: 16px;
+        line-height: 1.5;
+        background-color: #fff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .alttextarea {
+        display: none;
+        width: 100%;
+        height: 10em;
+        margin-bottom: 20px;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        padding: 10px;
+        font-size: 16px;
+        line-height: 1.5;
+        background-color: #fff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .alttextarea.active {
+        display: block;
+      }
+
+      #id_language {
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        height: 38px;
+        padding: 0 10px;
+        margin-left: 10px;
+        font-size: 16px;
+        line-height: 38px;
+        background-color: #fff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        cursor: pointer;
+        width: 100%;
+        box-sizing: border-box;
+        margin-bottom: 20px;
+        padding-right: 20px; /* add some extra space for the flag */
+      }
+
+      #id_language option {
+        padding: 10px;
+      }
+
+      #id_language option img {
+        width: 16px;
+        height: 12px;
+        margin-right: 10px;
+        vertical-align: middle;
+      }
+
+      #num-sentences {
+        width: 50px;
+        height: 38px;
+        padding: 0 10px;
+        margin: 0 20px;
+        font-size: 16px;
+        line-height: 38px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      #summary {
+        padding: 10px;
+        font-size: 16px;
+        line-height: 1.5;
+        margin-top: 20px; /* add spacing between button and summary */
+        border: none; /* make border invisible */
+        background-color: transparent; /* make background transparent */
+        box-shadow: none; /* remove shadow */
+      }
+
+      #summaryText {
+        color: #00698f; /* dark blue text color */
+        font-weight: bold; /* make text bold */
+      }
+
+      footer {
+        position: fixed;
+        bottom: 0;
+        right: 0;
+        padding: 10px;
+        font-size: 12px;
+        color: #666;
+        background-color: #fff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>TextLens 2.0</h1>
+      <p>Crafting Wisdom from Images and PDFs</p>
+      <p>
+        <label for="id_language">Language:</label>
+        <select id="id_language">
+          <option value="eng">English &#127463;&#127479;</option>
+          <option value="mar">Marathi &#127467;&#127479;</option>
+          <option value="hin">Hindi &#127467;&#127479;</option>
+        </select>
+      </p>
+    </div>
+    <input
+      type="file"
+      id="fileInput"
+      accept=".pdf,.jpg,.jpeg,.png,.gif"
+      style="display: none"
+    />
+    <div class="dropzone" id="dropzone">
+      Drag Drop PDF, JPG, PNG, or GIF file here or click to select a file
+    </div>
+    <div class="full-document-section" id="fullDocumentSection">
+      <h2>Full document</h2>
+      <textarea class="full-document" id="fullDocument"></textarea>
+      <h2>Pages</h2>
+    </div>
+    <div class="content">
+      <div class="image-container"></div>
+      <button id="summarize-button">Summarize</button>
+      <div id="summary">
+        <textarea class="alttextarea"></textarea>
+        <div id="summaryText"></div>
+      </div>
+    </div>
+    <footer>
+      Copyright &copy; 2024 Santosh Parse, Ramdas Rahate for MSc IT Part2
+      Project
+    </footer>
+    <script>
+      const desiredWidth = 1000;
+      const dropzone = document.getElementById("dropzone");
+      const fileInput = document.getElementById("fileInput");
+      const imageContainer = document.querySelector(".image-container");
+      const fullDocumentTextarea = document.getElementById("fullDocument");
+      const fullDocumentSection = document.getElementById(
+        "fullDocumentSection"
+      );
+      const languageSelect = document.getElementById("id_language");
+      const summaryText = document.getElementById("summaryText");
+      const alttextarea = document.querySelector(".alttextarea");
+      let fileSelectionAllowed = true;
+
+      const LANGUAGES = {
+        eng: "English",
+        mar: "Marathi",
+        hin: "Hindi",
+        san: "Sanskrit",
+      };
+      const converter = new showdown.Converter();
+
+      // Populate the languages select box
+      while (languageSelect.firstChild) {
+        languageSelect.removeChild(languageSelect.firstChild);
+      }
+
+      for (const code of Object.values(Tesseract.languages)) {
+        const name = LANGUAGES[code];
+        if (name == undefined) {
+          continue;
+        }
+        const option = document.createElement("option");
+        option.value = code;
+        option.textContent = name;
+        if (option.value == "eng") {
+          option.selected = true;
+        }
+        languageSelect.appendChild(option);
+      }
+
+      function showFullDocument() {
+        // Only shows if there are multiple populated textareas
+        const populatedTextareas = Array.from(
+          document.querySelectorAll(".image-container textarea")
+        ).filter((ta) => ta.value.trim().length);
+        if (populatedTextareas.length > 1) {
+          fullDocumentTextarea.value = populatedTextareas
+            .map((ta) => ta.value.trim())
+            .join("\n\n");
+          fullDocumentSection.style.display = "block";
+        } else {
+          fullDocumentTextarea.value = "";
+          fullDocumentSection.style.display = "none";
+        }
+      }
+
+      function setTextarea(ta, text) {
+        ta.value = text.trim();
+        // Set textarea height to fit content
+        ta.style.height = "auto";
+        ta.style.height = ta.scrollHeight + 5 + "px";
+      }
+
+      dropzone.addEventListener("dragover", handleDragOver);
+      dropzone.addEventListener("dragleave", handleDragLeave);
+      dropzone.addEventListener("drop", handleDrop);
+      dropzone.addEventListener("click", handleClick);
+
+      async function handleDragOver(event) {
+        event.preventDefault();
+        if (fileSelectionAllowed) {
+          dropzone.classList.add("drag-over");
+        }
+      }
+
+      async function handleDragLeave(event) {
+        event.preventDefault();
+        if (fileSelectionAllowed) {
+          dropzone.classList.remove("drag-over");
+        }
+      }
+
+      async function handleDrop(event) {
+        event.preventDefault();
+        if (fileSelectionAllowed) {
+          dropzone.classList.remove("drag-over");
+          const file = event.dataTransfer.files[0];
+          fileInput.files = event.dataTransfer.files;
+          processFile(file);
+        }
+      }
+
+      async function handleClick() {
+        if (fileSelectionAllowed) {
+          fileInput.click();
+        }
+      }
+
+      fileInput.addEventListener("change", (event) => {
+        const file = event.target.files[0];
+        processFile(file);
+      });
+
+      async function processFile(file) {
+        const worker = await Tesseract.createWorker(languageSelect.value);
+        fullDocumentTextarea.value = "";
+        fullDocumentSection.style.display = "none";
+        imageContainer.innerHTML = "";
+        const originalText = dropzone.innerText;
+        dropzone.innerText = "Processing file...";
+        dropzone.classList.add("disabled");
+        fileSelectionAllowed = false;
+
+        if (file.type === "application/pdf") {
+          const { numPages, imageIterator } = await convertPDFToImages(file);
+          let done = 0;
+          dropzone.innerText = `Processing ${numPages} page${
+            numPages > 1 ? "s" : ""
+          }`;
+          for await (const { imageURL } of imageIterator) {
+            const ta = await displayImage(imageURL);
+            const { text } = await ocrImage(worker, imageURL);
+            setTextarea(ta, text);
+            showFullDocument();
+            done += 1;
+            dropzone.innerText = `Done ${done} of ${numPages}`;
+          }
+        } else {
+          const imageURL = URL.createObjectURL(file);
+          const ta = await displayImage(imageURL);
+          const { text } = await ocrImage(worker, imageURL);
+          setTextarea(ta, text);
+          showFullDocument();
+        }
+
+        await worker.terminate();
+        dropzone.innerText = originalText;
+        dropzone.classList.remove("disabled");
+        fileSelectionAllowed = true;
+      }
+
+      async function displayImage(imageURL) {
+        const imgElement = document.createElement("img");
+        imgElement.src = imageURL;
+        imageContainer.appendChild(imgElement);
+
+        const altTextarea = document.createElement("textarea");
+        altTextarea.classList.add("textarea-alt");
+        altTextarea.placeholder = "OCRing image...";
+        imageContainer.appendChild(altTextarea);
+
+        return altTextarea;
+      }
+
+      async function rerunOCR() {
+        const textareas = document.querySelectorAll(
+          ".image-container textarea"
+        );
+        const images = document.querySelectorAll(".image-container img");
+
+        if (!textareas.length) {
+          return;
+        }
+
+        // Blank all the textareas
+        Array.from(textareas).forEach((ta) => (ta.value = ""));
+        showFullDocument();
+
+        const numImages = images.length;
+        let done = 0;
+        dropzone.innerText = `Processing ${numImages} image${
+          numImages > 1 ? "s" : ""
+        }`;
+
+        const worker = await Tesseract.createWorker(languageSelect.value);
+
+        for (let i = 0; i < numImages; i++) {
+          const imageURL = images[i].src;
+          const ta = textareas[i];
+          ta.placeholder = "OCRing image...";
+          const { text } = await ocrImage(worker, imageURL);
+          setTextarea(ta, text);
+          showFullDocument();
+          done += 1;
+          dropzone.innerText = `Done ${done} of ${numImages}`;
+        }
+        await worker.terminate();
+      }
+
+      document.addEventListener("paste", (event) => {
+        const items = (event.clipboardData || event.originalEvent.clipboardData)
+          .items;
+        const images = Array.from(items).filter(
+          (item) => item.type.indexOf("image") !== -1
+        );
+        if (images.length) {
+          processFile(images[0].getAsFile());
+        }
+      });
+
+      async function convertPDFToImages(file) {
+        // returns { numPages, imageIterator }
+        const pdf = await pdfjsLib.getDocument(URL.createObjectURL(file))
+          .promise;
+        const numPages = pdf.numPages;
+        async function* images() {
+          for (let i = 1; i <= numPages; i++) {
+            try {
+              const page = await pdf.getPage(i);
+              const viewport = page.getViewport({ scale: 1 });
+              const canvas = document.createElement("canvas");
+              const context = canvas.getContext("2d");
+              canvas.width = desiredWidth;
+              canvas.height = (desiredWidth / viewport.width) * viewport.height;
+              const renderContext = {
+                canvasContext: context,
+                viewport: page.getViewport({
+                  scale: desiredWidth / viewport.width,
+                }),
+              };
+              await page.render(renderContext).promise;
+              const imageURL = canvas.toDataURL("image/jpeg", 0.8);
+              yield { imageURL };
+            } catch (error) {
+              console.error(`Error rendering page ${i}:`, error);
+            }
+          }
+        }
+        return { numPages: numPages, imageIterator: images() };
+      }
+
+      async function ocrImage(worker, imageUrl) {
+        const {
+          data: { text },
+        } = await worker.recognize(imageUrl);
+        return { text };
+      }
+
+      // Update URL bar to match language select
+      languageSelect.addEventListener("change", async (event) => {
+        let newUrl = window.location.pathname;
+        let language = event.target.value;
+        if (language != "eng") {
+          newUrl += "?language=" + language;
+        }
+        window.history.pushState({ path: newUrl }, "", newUrl);
+        await rerunOCR();
+      });
+
+      function setLanguageFromQueryString() {
+        const params = new URLSearchParams(window.location.search);
+        let value = params.get("language");
+        if (!value) {
+          value = "eng";
+        }
+        languageSelect.value = value;
+      }
+
+      // Set the select box value when the page loads
+      window.addEventListener("load", setLanguageFromQueryString);
+
+      window.addEventListener("popstate", (event) => {
+        setLanguageFromQueryString();
+      });
+
+      const summarizeButton = document.getElementById("summarize-button");
+      const summaryDiv = document.getElementById("summary");
+
+      summarizeButton.addEventListener("click", async () => {
+        summaryText.style.display = "block";
+        alttextarea.classList.add("active");
+        alttextarea.placeholder = "Summarizing text...";
+
+        let text = "";
+        const textareas = document.querySelectorAll(
+          ".image-container textarea"
+        );
+        textareas.forEach((textarea) => {
+          text += textarea.value.trim();
+        });
+
+        // Basic Summzry   :  https://app-textlens.azurewebsites.net/api/summarize
+        // Points Summary  :  https://app-textlens.azurewebsites.net/api/summarize_in_points
+        // Refined Summary :  https://app-textlens.azurewebsites.net/api/summarize_refined
+        const url =
+          "https://app-textlens.azurewebsites.net/api/summarize_refined";
+        dropzone.innerText = "Summarizing text...";
+        dropzone.classList.add("disabled");
+        fileSelectionAllowed = false;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              text: text,
+            }),
+          });
+
+          const data = await response.json();
+          const html = converter.makeHtml(data.summary);
+          summaryText.innerHTML = html.replace(/\n/g, "<br>");
+
+          dropzone.innerText = "Summary done!";
+        } catch (error) {
+          console.error("Error summarizing text:", error);
+          dropzone.innerText = "Error summarizing text";
+        } finally {
+          dropzone.classList.remove("disabled");
+          fileSelectionAllowed = true;
+          alttextarea.classList.remove("active");
+          alttextarea.placeholder = "";
+        }
+      });
+    </script>
+  </body>
+</html>
